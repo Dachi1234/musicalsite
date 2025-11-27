@@ -76,8 +76,10 @@ app.post('/api/register', async (req, res) => {
         // Insert new user into database
         // Note: In production, password should be hashed with bcrypt
         const result = await pool.query(
-            'INSERT INTO users (username, password, email, role) VALUES ($1, $2, $3, $4) RETURNING id, username, email, role',
-            [username.trim(), password, email ? email.trim() : null, 'student']
+            `INSERT INTO users (username, password, email, role, display_name)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING id, username, email, role, display_name AS "displayName", theme_pref AS "themePref"`,
+            [username.trim(), password, email ? email.trim() : null, 'student', username.trim()]
         );
 
         const newUser = result.rows[0];
@@ -110,7 +112,15 @@ app.post('/api/login', async (req, res) => {
 
         // Query user from database
         const result = await pool.query(
-            'SELECT id, username, password, email, role FROM users WHERE username = $1',
+            `SELECT id,
+                    username,
+                    password,
+                    email,
+                    role,
+                    display_name AS "displayName",
+                    theme_pref AS "themePref"
+             FROM users
+             WHERE username = $1`,
             [username]
         );
 
@@ -138,6 +148,74 @@ app.post('/api/login', async (req, res) => {
     } catch (error) {
         console.error('Error during login:', error);
         res.status(500).json({ success: false, message: 'Error during login', error: error.message });
+    }
+});
+
+// User profile endpoints
+app.get('/api/users/:userId/profile', async (req, res) => {
+    try {
+        const userId = parseInt(req.params.userId);
+
+        if (isNaN(userId)) {
+            return res.status(400).json({ success: false, message: 'Invalid user ID' });
+        }
+
+        const result = await pool.query(
+            `SELECT id, username, email, display_name AS "displayName", bio, avatar_url AS "avatarUrl", theme_pref AS "themePref"
+             FROM users
+             WHERE id = $1`,
+            [userId]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.json({ success: true, profile: result.rows[0] });
+    } catch (error) {
+        console.error('Error fetching profile:', error);
+        res.status(500).json({ success: false, message: 'Error fetching profile', error: error.message });
+    }
+});
+
+app.put('/api/users/:userId/profile', async (req, res) => {
+    try {
+        const userId = parseInt(req.params.userId);
+        const { displayName, bio, avatarUrl, themePref } = req.body;
+
+        if (isNaN(userId)) {
+            return res.status(400).json({ success: false, message: 'Invalid user ID' });
+        }
+
+        const allowedThemes = ['dark', 'light'];
+        const sanitizedTheme = themePref && allowedThemes.includes(themePref) ? themePref : null;
+
+        const result = await pool.query(
+            `UPDATE users
+             SET display_name = $2,
+                 bio = $3,
+                 avatar_url = $4,
+                 theme_pref = COALESCE($5, theme_pref),
+                 updated_at = NOW()
+             WHERE id = $1
+             RETURNING id, username, email, display_name AS "displayName", bio, avatar_url AS "avatarUrl", theme_pref AS "themePref"`,
+            [
+                userId,
+                displayName ? displayName.trim() : null,
+                bio ? bio.trim() : null,
+                avatarUrl ? avatarUrl.trim() : null,
+                sanitizedTheme
+            ]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        res.json({ success: true, message: 'Profile updated', profile: result.rows[0] });
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        res.status(500).json({ success: false, message: 'Error updating profile', error: error.message });
     }
 });
 

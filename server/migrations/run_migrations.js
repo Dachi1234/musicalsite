@@ -93,6 +93,14 @@ async function runMigrations() {
             console.log(`ℹ️  Course interests already exist (${courseInterestsCount} entries), skipping`);
         }
 
+        // Add profile fields to users table
+        const addProfileFieldsSQL = fs.readFileSync(
+            path.join(__dirname, '008_add_profile_fields_to_users.sql'),
+            'utf8'
+        );
+        await pool.query(addProfileFieldsSQL);
+        console.log('✅ Ensured profile fields exist on users table');
+
         console.log('✅ All migrations completed successfully!');
     } catch (error) {
         console.error('❌ Migration error:', error);

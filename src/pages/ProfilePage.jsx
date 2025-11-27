@@ -5,11 +5,21 @@ function ProfilePage() {
   const [activeTab, setActiveTab] = useState('interests');
   const [allInterests, setAllInterests] = useState([]);
   const [userInterests, setUserInterests] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
-  const [error, setError] = useState(false);
+  const [interestsLoading, setInterestsLoading] = useState(true);
+  const [interestsSaving, setInterestsSaving] = useState(false);
+  const [interestMessage, setInterestMessage] = useState('');
+  const [interestError, setInterestError] = useState(false);
   const [user, setUser] = useState(null);
+  const [profile, setProfile] = useState({
+    displayName: '',
+    bio: '',
+    avatarUrl: '',
+    themePref: 'dark'
+  });
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileMessage, setProfileMessage] = useState('');
+  const [profileError, setProfileError] = useState(false);
 
   useEffect(() => {
     // Get user from localStorage (set during login)
@@ -17,10 +27,19 @@ function ProfilePage() {
     if (storedUser) {
       const userData = JSON.parse(storedUser);
       setUser(userData);
-      fetchUserInterests(userData.id);
     }
+  }, []);
+
+  useEffect(() => {
     fetchAllInterests();
   }, []);
+
+  useEffect(() => {
+    if (user) {
+      fetchUserInterests(user.id);
+      fetchUserProfile(user.id);
+    }
+  }, [user]);
 
   const fetchAllInterests = async () => {
     try {
@@ -39,18 +58,39 @@ function ProfilePage() {
       setAllInterests(grouped);
     } catch (error) {
       console.error('Error fetching interests:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
   const fetchUserInterests = async (userId) => {
     try {
+      setInterestsLoading(true);
       const response = await fetch(`/api/users/${userId}/interests`);
       const data = await response.json();
       setUserInterests(data.map(i => i.id));
     } catch (error) {
       console.error('Error fetching user interests:', error);
+    } finally {
+      setInterestsLoading(false);
+    }
+  };
+
+  const fetchUserProfile = async (userId) => {
+    try {
+      setProfileLoading(true);
+      const response = await fetch(`/api/users/${userId}/profile`);
+      const data = await response.json();
+      if (data.success && data.profile) {
+        setProfile({
+          displayName: data.profile.displayName || '',
+          bio: data.profile.bio || '',
+          avatarUrl: data.profile.avatarUrl || '',
+          themePref: data.profile.themePref || 'dark'
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+    } finally {
+      setProfileLoading(false);
     }
   };
 
@@ -64,14 +104,14 @@ function ProfilePage() {
 
   const handleSaveInterests = async () => {
     if (!user) {
-      setMessage('Please login first');
-      setError(true);
+      setInterestMessage('Please login first');
+      setInterestError(true);
       return;
     }
 
-    setSaving(true);
-    setMessage('');
-    setError(false);
+    setInterestsSaving(true);
+    setInterestMessage('');
+    setInterestError(false);
 
     try {
       const response = await fetch(`/api/users/${user.id}/interests`, {
@@ -85,21 +125,78 @@ function ProfilePage() {
       const data = await response.json();
       
       if (data.success) {
-        setMessage('Interests saved successfully!');
-        setError(false);
+        setInterestMessage('Interests saved successfully!');
+        setInterestError(false);
       } else {
-        setMessage(data.message || 'Failed to save interests');
-        setError(true);
+        setInterestMessage(data.message || 'Failed to save interests');
+        setInterestError(true);
       }
     } catch (error) {
-      setMessage('Error saving interests. Please try again.');
-      setError(true);
+      setInterestMessage('Error saving interests. Please try again.');
+      setInterestError(true);
     } finally {
-      setSaving(false);
+      setInterestsSaving(false);
     }
   };
 
-  if (loading) {
+  const handleProfileChange = (field, value) => {
+    setProfile(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleProfileSave = async () => {
+    if (!user) {
+      setProfileMessage('Please login first');
+      setProfileError(true);
+      return;
+    }
+
+    setProfileSaving(true);
+    setProfileMessage('');
+    setProfileError(false);
+
+    try {
+      const response = await fetch(`/api/users/${user.id}/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          displayName: profile.displayName,
+          bio: profile.bio,
+          avatarUrl: profile.avatarUrl,
+          themePref: profile.themePref
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success && data.profile) {
+        setProfileMessage('Profile updated successfully!');
+        setProfileError(false);
+
+        const updatedUser = {
+          ...user,
+          displayName: data.profile.displayName,
+          themePref: data.profile.themePref
+        };
+        setUser(updatedUser);
+        localStorage.setItem('user', JSON.stringify(updatedUser));
+      } else {
+        setProfileMessage(data.message || 'Failed to update profile');
+        setProfileError(true);
+      }
+    } catch (error) {
+      setProfileMessage('Error updating profile. Please try again.');
+      setProfileError(true);
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  if (!user || interestsLoading || profileLoading) {
     return (
       <div className="courses-page">
         <div className="loading-container">
@@ -221,21 +318,21 @@ function ProfilePage() {
                 <button 
                   className="btn-primary" 
                   onClick={handleSaveInterests}
-                  disabled={saving}
+                  disabled={interestsSaving}
                 >
-                  {saving ? 'Saving...' : 'Save Interests'}
+                  {interestsSaving ? 'Saving...' : 'Save Interests'}
                 </button>
-                {message && (
+                {interestMessage && (
                   <div style={{ 
                     marginTop: '15px', 
                     padding: '12px', 
                     borderRadius: '8px',
-                    backgroundColor: error ? '#f8d7da' : '#d4edda',
-                    color: error ? '#721c24' : '#155724',
+                    backgroundColor: interestError ? '#f8d7da' : '#d4edda',
+                    color: interestError ? '#721c24' : '#155724',
                     textAlign: 'center',
                     fontWeight: '500'
                   }}>
-                    {message}
+                    {interestMessage}
                   </div>
                 )}
               </div>
@@ -258,8 +355,74 @@ function ProfilePage() {
                   </div>
                 )}
                 <div className="info-item">
+                  <label>Display Name</label>
+                  <input
+                    type="text"
+                    value={profile.displayName}
+                    onChange={(e) => handleProfileChange('displayName', e.target.value)}
+                    placeholder="Enter display name"
+                  />
+                </div>
+                <div className="info-item">
+                  <label>Avatar URL</label>
+                  <input
+                    type="text"
+                    value={profile.avatarUrl}
+                    onChange={(e) => handleProfileChange('avatarUrl', e.target.value)}
+                    placeholder="https://example.com/avatar.png"
+                  />
+                  {profile.avatarUrl && (
+                    <img 
+                      src={profile.avatarUrl} 
+                      alt="Avatar preview" 
+                      style={{ marginTop: '10px', width: '80px', height: '80px', borderRadius: '50%', objectFit: 'cover' }}
+                    />
+                  )}
+                </div>
+                <div className="info-item">
+                  <label>Bio</label>
+                  <textarea
+                    value={profile.bio}
+                    onChange={(e) => handleProfileChange('bio', e.target.value)}
+                    placeholder="Tell us more about your musical journey..."
+                    rows={4}
+                  />
+                </div>
+                <div className="info-item">
+                  <label>Theme Preference</label>
+                  <select
+                    value={profile.themePref}
+                    onChange={(e) => handleProfileChange('themePref', e.target.value)}
+                  >
+                    <option value="dark">Dark</option>
+                    <option value="light">Light</option>
+                  </select>
+                </div>
+                <div className="info-item">
                   <label>Role</label>
                   <p>{user.role}</p>
+                </div>
+                <div className="profile-actions">
+                  <button
+                    className="btn-primary"
+                    onClick={handleProfileSave}
+                    disabled={profileSaving}
+                  >
+                    {profileSaving ? 'Saving...' : 'Save Profile'}
+                  </button>
+                  {profileMessage && (
+                    <div style={{ 
+                      marginTop: '15px', 
+                      padding: '12px', 
+                      borderRadius: '8px',
+                      backgroundColor: profileError ? '#f8d7da' : '#d4edda',
+                      color: profileError ? '#721c24' : '#155724',
+                      textAlign: 'center',
+                      fontWeight: '500'
+                    }}>
+                      {profileMessage}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
