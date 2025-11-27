@@ -82,6 +82,22 @@ Vite proxies `/api/*` calls to the Express server, so both should run simultaneo
 - Run `npm run build` for frontend (if deploying as static assets)
 - Optional: configure CI/CD (GitHub Actions) for lint/test/migrations
 
+## GitHub Pages Deployment
+
+This repo ships with `.github/workflows/deploy.yml`, which:
+
+1. Builds the Vite frontend on every push to `main`
+2. Uploads the `dist/` artifact
+3. Publishes it to **GitHub Pages** (project site)
+
+After the first successful run, GitHub will host the static frontend at:
+
+```
+https://dachi1234.github.io/musicalsite/
+```
+
+> ⚠️ The backend API does not run on GitHub Pages. To exercise login/profile features in production, deploy the Express server separately (Render, Railway, Fly.io, etc.) and update the frontend API base URL.
+
 ## Roadmap
 
 - Password hashing (bcrypt) + tokens
